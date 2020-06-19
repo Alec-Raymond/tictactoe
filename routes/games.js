@@ -4,25 +4,25 @@ const fs = require("fs");
 let gameboards;
 
 const initGameboards = function () {
-    gameboards = JSON.parse(fs.readFileSync("./files/gameboards.json"));
+  gameboards = JSON.parse(fs.readFileSync("./files/gameboards.json"));
 };
 initGameboards();
 console.log("initialized gameboards");
 
 const updateGames = async function (update) {
-    let newFile = fs.writeFile(
-      "./files/gameboards.json",
-      `${JSON.stringify(update)}`,
-      function (err) {
-        if (err) console.log(err);
-        return JSON.stringify(update);
-      }
-    );
-  console.log('Updating gameboards.json ...');
+  let newFile = fs.writeFile(
+    "./files/gameboards.json",
+    `${JSON.stringify(update)}`,
+    function (err) {
+      if (err) console.log(err);
+      return JSON.stringify(update);
+    }
+  );
+  console.log("Updating gameboards.json ...");
   return newFile;
 };
 
-const findGameById =  function (id) {
+const findGameById = function (id) {
   return gameboards.find((c) => c.id === parseInt(id, 10));
 };
 
@@ -64,14 +64,18 @@ const checkIfValidCoords = function (row, column, game) {
 const winner = function (board, side) {
   for (let index = 0; index < board.length; index++) {
     if (
-      board[index].every(element => element == side) ||
-      [board[0][index], board[1][index], board[2][index]].every(element => element == side)
+      board[index].every((element) => element == side) ||
+      [board[0][index], board[1][index], board[2][index]].every(
+        (element) => element == side
+      )
     )
       return side;
   }
   if (
-    [board[0][0], board[1][1], board[2][2]].every(element => element == side) ||
-    [board[0][2], board[1][1], board[2][0]].every(element => element == side)
+    [board[0][0], board[1][1], board[2][2]].every(
+      (element) => element == side
+    ) ||
+    [board[0][2], board[1][1], board[2][0]].every((element) => element == side)
   ) {
     console.log("Winner Found!");
     return side;
