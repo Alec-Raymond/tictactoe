@@ -1,8 +1,15 @@
 const express = require("express");
 const router = express.Router();
 const fs = require("fs");
-let gameboards;
+const Sequelize = require("sequelize");
 
+const sequelize = new Sequelize("tictactoe", "postgres", "1234", {
+  host: "localhost",
+  port: 5432,
+  dialect: "postgres",
+  operatorsAliases: false
+});
+let gameboards;
 
 // Initializes gameboards to be equal to gameboards.json
 const initGameboards = function () {
