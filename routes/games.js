@@ -1,82 +1,130 @@
-const express = require("express");
-const router = express.Router();
-const fs = require("fs");
-const Sequelize = require("sequelize");
+const express = require("express"),
+  router = express.Router(),
+  pg = require("pg"),
+  cs = "postgres://postgres:1234@localhost:5432/tictactoe",
+  client = new pg.Client({ connectionString: cs });
+client.connect();
 
-const sequelize = new Sequelize("tictactoe", "postgres", "1234", {
-  host: "localhost",
-  port: 5432,
-  dialect: "postgres",
-  operatorsAliases: false
-});
-let gameboards;
-
-// Initializes gameboards to be equal to gameboards.json
-const initGameboards = function () {
-  gameboards = JSON.parse(fs.readFileSync("./files/gameboards.json"));
-};
-initGameboards();
-
-// Updates gameboards.json with whatever is in the function parameter
-const updateGames = async function (update) {
-  let newFile = fs.writeFile(
-    "./files/gameboards.json",
-    `${JSON.stringify(update)}`,
-    () => {}
+// Updates tictactoe database with whatever is in the function parameter
+const newGame = async function (update) {
+  await client.query(
+    "INSERT INTO gameinfo(won, turn) VALUES($1, $2) RETURNING *",
+    [update.won, update.turn]
   );
-  return newFile;
+  await client.query(
+    "INSERT INTO gameboard(topLeft, topMiddle, topRight, middleLeft, middleMiddle, middleRight, bottomLeft, bottomMiddle, bottomRight) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *",
+    [
+      update.board[0][0],
+      update.board[0][1],
+      update.board[0][2],
+      update.board[1][0],
+      update.board[1][1],
+      update.board[1][2],
+      update.board[2][0],
+      update.board[2][1],
+      update.board[2][2],
+    ]
+  );
 };
 
-// Finds the game with a specific id in the array gameboards
-const findGameById = function (id) {
-  return gameboards.find((c) => c.id === parseInt(id, 10));
-};
-
-// Replaces the array
-const makeTurn = function (row, column, game, side) {
-  if (game.turn === side && game.won === "no") {
-    game.board[row][column] = side;
-    switch (side) {
-      case "x":
-        game.turn = "o";
-        break;
-      case "o":
-        game.turn = "x";
-        break;
-    }
-    return true;
-  } 
-};
-
-// Checks if the coordinates given are able to be pu
-const checkIfValidCoords = function (row, column, game) {
-  if (
-    row >= 0 ||
-    row <= 2 ||
-    column >= 0 ||
-    column <= 2 ||
-    game.board[row][column] === "-"
-  )
-    return true;
-};
-
-// Analyzes the function to see who won
-const winner = function (board, side) {
-  for (let index = 0; index < board.length; index++) {
+const makeTurn = async function (game, id, update, where) {
+  try {
     if (
-      board[index].every((element) => element == side) ||
-      [board[0][index], board[1][index], board[2][index]].every(
-        (element) => element == side
-      )
-    )
-      return side;
+      game.rows[0].won == "no" &&
+      game.rows[0].turn == update &&
+      game.rows[0][where] == "-"
+    ) {
+      console.log(id);
+      const res = await client.query(
+        `UPDATE gameboard SET ` + where + `= '` + update + `' WHERE id =${id}`
+      );
+      switch (game.rows[0].turn) {
+        case "x":
+          await client.query(`UPDATE gameinfo SET turn = 'o' WHERE id =${id}`);
+          break;
+        case "o":
+          await client.query(`UPDATE gameinfo SET turn = 'x' WHERE id =${id}`);
+          break;
+      }
+      return res;
+    }
+  } catch (err) {
+    console.log(err);
+    return false;
   }
-  if (
-    [board[0][0], board[1][1], board[2][2]].every(
+};
+
+// Finds the game with a specific id in the database tictactoe
+const findGameById = async function (id) {
+  const res = client.query(
+    `SELECT * FROM gameinfo INNER JOIN gameboard ON gameinfo.id = gameboard.id WHERE gameboard.id = ${id}`
+  );
+  return res;
+};
+
+const winByRow = function (board, side, index) {
+  if(board[index].every((element) => element == side)) return true;
+};
+
+const winByColumn = function (board, side, index) {
+  if([board[0][index], board[1][index], board[2][index]].every(
+        (element) => element == side
+      )) return true;
+};
+
+const winByDiag = function (board, side) {
+  if([board[0][0], board[1][1], board[2][2]].every(
       (element) => element == side
     ) ||
     [board[0][2], board[1][1], board[2][0]].every((element) => element == side)
+  ) return true;
+};
+
+
+// Analyzes the function to see who won
+const winner = async function (id, side) {
+  let gameboard = await client.query(`SELECT * FROM gameboard WHERE id=${id}`);
+  let board = [
+    [
+      gameboard.rows[0].topleft,
+      gameboard.rows[0].topmiddle,
+      gameboard.rows[0].topright,
+    ],
+    [
+      gameboard.rows[0].middleleft,
+      gameboard.rows[0].middlemiddle,
+      gameboard.rows[0].middleright,
+    ],
+    [
+      gameboard.rows[0].bottomleft,
+      gameboard.rows[0].bottommiddle,
+      gameboard.rows[0].bottomright,
+    ],
+  ];
+  console.log(board, side);
+  for (let index = 0; index < board.length; index++) {
+    if (
+      winByRow(board, side, index) ||
+      winByColumn(board, side, index)
+    ) {
+      await client.query(
+        `UPDATE gameinfo SET won = REPLACE(won, 'no', '` +
+          side +
+          `') WHERE id = ` +
+          id
+      );
+      return side;
+    }
+  }
+  if (
+    winByDiag(board, side)
   ) {
+    await client.query(
+      `UPDATE gameinfo SET won = REPLACE(won, 'no', '` +
+        side +
+        `') WHERE id = ` +
+        id
+    );
     return side;
   }
   return "no";
@@ -84,8 +132,8 @@ const winner = function (board, side) {
 
 //adds a new empty game to the end of the list
 router.post("/", async (req, res) => {
-  const game = {
-    id: gameboards[gameboards.length - 1].id + 1,
+  let game = {
+     id: 1,
     board: [
       ["-", "-", "-"],
       ["-", "-", "-"],
@@ -94,50 +142,50 @@ router.post("/", async (req, res) => {
     won: "no",
     turn: "o",
   };
-  gameboards.push(game);
-  await updateGames(gameboards);
-  res.send(gameboards[gameboards.length - 1]);
+  await newGame(game);
+  let id = await client.query("SELECT * FROM gameinfo INNER JOIN gameboard ON gameinfo.id = gameboard.id ORDER BY gameboard.id DESC");
+  try {game.id = id.rows[0].id;}
+  catch (err) {
+    game.id = 1;
+  }
+  res.send(game);
 });
 
-//returns a list of games 
-router.get("/", (req, res) => {
-  res.send(gameboards);
+//returns a list of games
+router.get("/", async (req, res) => {
+  try {
+    const q = client.query(
+      "SELECT * FROM gameinfo INNER JOIN gameboard ON gameinfo.id = gameboard.id ORDER BY gameboard.id DESC"
+    );
+    res.send(await q);
+  } catch (err) {
+    res.status(400).send(err);
+  }
 });
 
 //returns a game from the gameboards array
-router.get("/:id", (req, res) => {
-  const game = findGameById(req.params.id);
+router.get("/:id", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const game = await findGameById(id);
   if (!game)
     return res.status(404).send("The game with that id does not exist.");
   res.send(game);
 });
 
 // puts an x or o at the coordinates given, updates game.won
-router.put("/:id/:row/:col/:side", async (req, res) => {
-  const game = findGameById(req.params.id);
-  const row = parseInt(req.params.row, 10);
-  const column = parseInt(req.params.col, 10);
+router.put("/:id/:position/:side", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  let game = await findGameById(id);
+  if (!game)
+    return res.status(404).send("The game with that id does not exist.");
+  const position = req.params.position;
   const side = req.params.side;
-  if (!game)
-    return res.status(404).send("The game with that id does not exist.");
-  if (!checkIfValidCoords(row, column, game))
-    return res.status(400).send("The position that you entered was invalid.");
-  if (!makeTurn(row, column, game, side))
-    return res.status(400).send("The side that you entered invalid.");
-  game.won = winner(game.board, side);
-  await updateGames(gameboards);
-  res.send(game);
-});
-
-//deletes a game from gameboard
-router.delete("/:id", async (req, res) => {
-  const game = findGameById(req.params.id);
-  if (!game)
-    return res.status(404).send("The game with that id does not exist.");
-  const index = gameboards.indexOf(game);
-  gameboards.splice(index, 1);
-  await updateGames(gameboards);
-  res.send(game);
+  if (!(await makeTurn(game, id, side, position)))
+    return res
+      .status(400)
+      .send("The side or position that you entered was invalid.");
+  await winner(id, side);
+  res.send(await findGameById(id));
 });
 
 module.exports = router;
