@@ -25,6 +25,28 @@ for the first time, use the command __sudo service postgresql start__
 Another option would be to change the cs url const at line 4 of games.js to match the format  
 postgres://dbuser:secretpassword@database.server.com:3211/mydb
 
+Then, run these commands to get the necessary schema:
+
+CREATE DATABASE tictactoe;  
+\c database;  
+CREATE TABLE gameinfo(  
+    id SERIAL,  
+    won TEXT,  
+    turn CHAR(1),  
+);  
+CREATE TABLE gameboard(  
+    id SERIAL,  
+    topleft CHAR(1),  
+    topmiddle CHAR(1),  
+    topright CHAR(1),  
+    middleleft CHAR(1),  
+    middlemiddle CHAR(1),  
+    middleright CHAR(1),  
+    bottomleft CHAR(1),  
+    bottommiddle CHAR(1),    
+    bottomright CHAR(1),  
+);
+
 ### How to play
 
 Use a service like postman to send requests to the http, using the ngrok links provided:  
