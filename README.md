@@ -17,7 +17,7 @@ This program stores the tictactoe games in a database on your system using a psq
 
 * node index.js
 * ngrok http 5432
-* psql -U postgres -h localhost
+* psql -U postgres -h localhost (password should be 1234) 
 
 For the last command, you may need to install postgres onto your system. If you are using the server  
 for the first time, use the command __sudo service postgresql start__
